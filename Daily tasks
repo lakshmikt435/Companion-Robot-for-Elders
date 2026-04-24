@@ -1,0 +1,297 @@
+import time
+import random
+import requests
+import schedule
+import pyttsx3
+import pygame
+import smtplib
+import json
+from datetime import datetime
+from pathlib import Path
+
+# Initialize the pyttsx3 engine
+engine = pyttsx3.init()
+engine.setProperty('rate', 150)  # Adjust speaking rate
+engine.setProperty('volume', 1.0)  # Set volume level
+
+# Initialize pygame for alarm sound
+try:
+    pygame.mixer.init()
+except Exception as e:
+    print(f"Error initializing pygame: {e}")
+# Function to convert text to speech
+def speak(text):
+    engine.say(text)
+    engine.runAndWait()
+    
+# Path to save the progress of Bible verses read
+progress_file = Path("verses_progress.json")
+
+# List of Bible verses
+bible_verses = [
+    "For I know the plans I have for you, declares the Lord. - Jeremiah 29:11",
+    "The Lord is my shepherd; I shall not want. - Psalm 23:1",
+    "I can do all things through Christ who strengthens me. - Philippians 4:13",
+    "Trust in the Lord with all your heart and lean not on your own understanding. - Proverbs 3:5",
+    "Be strong and courageous. Do not be afraid; do not be discouraged, for the Lord your God will be with you wherever you go. - Joshua 1:9",
+    "This is the day that the Lord has made; let us rejoice and be glad in it. - Psalm 118:24",
+    "For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life. - John 3:16",
+    "The steadfast love of the Lord never ceases; his mercies never come to an end. - Lamentations 3:22-23",
+    "God is our refuge and strength, a very present help in trouble. - Psalm 46:1",
+    "The name of the Lord is a strong tower; the righteous man runs into it and is safe. - Proverbs 18:10",
+]
+
+def load_progress():
+    """Load verses progress from the file."""
+    if progress_file.exists():
+        with progress_file.open("r") as file:
+            return json.load(file)
+    return {"read_verses": []}
+
+def save_progress(progress):
+    """Save verses progress to the file."""
+    with progress_file.open("w") as file:
+        json.dump(progress, file)
+def configure_tts():
+    """Configure the text-to-speech engine for clear and slow reading."""
+    engine = pyttsx3.init()
+    # Set properties for clarity and slow speech
+    engine.setProperty("rate", 140)  # Adjust rate (default is around 200 wpm; lower is slower)
+    engine.setProperty("volume", 0.9)  # Set volume (0.0 to 1.0)
+    return engine
+
+
+
+def read_daily_verse():
+    """Read a daily Bible verse."""
+    progress = load_progress()
+    read_verses = progress.get("read_verses", [])
+    
+    # Check if all verses have been read
+    if len(read_verses) == len(bible_verses):
+        print("All verses have been read. Resetting the list.")
+        read_verses = []
+
+    # Select a random unread verse
+    unread_verses = [verse for verse in bible_verses if verse not in read_verses]
+    verse = random.choice(unread_verses)
+    read_verses.append(verse)
+
+    # Save progress
+    progress["read_verses"] = read_verses
+    save_progress(progress)
+
+    # Read the verse with text-to-speech
+    engine = configure_tts()
+    print(f"Today's Bible verse: {verse}")
+    speak(verse)
+    engine.runAndWait()
+# Meal Suggestions
+meal_plan = {
+    "breakfast": ["Oatmeal with fruits", "Egg and toast", "Smoothie"],
+    "lunch": ["Grilled chicken with vegetables", "Vegetable curry and rice", "Pasta salad"],
+    "snacks": ["Fruit salad", "Yogurt with granola", "Peanut butter toast"],
+    "dinner": ["Soup and bread", "Grilled fish with quinoa", "Stir-fried tofu with vegetables"]
+}
+
+def suggest_meal(meal_type):
+    suggestion = random.choice(meal_plan[meal_type])
+    message = f"Hey! It's time for {meal_type}. Today's meal suggestion is {suggestion}."
+    print(message)
+    speak(message)
+    
+# Medication Reminder
+medication_schedule = [
+    {"name": "Vitamin C", "time": "12:12", "dose": "1 tablet"},
+    {"name": "Painkiller", "time": "20:00", "dose": "1 tablet"}
+]
+
+def medication_reminder():
+    now = datetime.now().strftime("%H:%M")
+    for med in medication_schedule:
+        if now == med["time"]:
+            message = f"Time to take your {med['dose']} of {med['name']}."
+            print(message)
+            speak(message)
+
+# Wake-up Call
+def wakeup_call():
+    print("Good morning! It's time to wake up!")
+    speak("Good morning! It's time to wake up! I hope today brings you good health and happiness.")
+    try:
+        pygame.mixer.music.load("gentle_alarm.mp3")  # Replace with your alarm sound file
+        pygame.mixer.music.play()
+        while pygame.mixer.music.get_busy():
+            time.sleep(1)
+    except Exception as e:
+        print(f"Error playing alarm sound: {e}")
+
+# Exercise Prompts
+exercises = [
+    {"name": "Neck Stretch", "category": "Stretching", 
+     "instruction": "Gently tilt your head to the left, hold for 5 seconds, then to the right for another 5 seconds."},
+    {"name": "Deep Breathing", "category": "Breathing", 
+     "instruction": "Inhale deeply through your nose, hold for 3 seconds, and exhale through your mouth. Repeat this 5 times."},
+    {"name": "Child's Pose", "category": "Yoga", 
+     "instruction": "Sit back on your heels, stretch your arms forward, and hold the position for 10 seconds."},
+]
+
+def announce_exercise():
+    speak("Let's start our exercise session.")
+    for exercise in exercises:
+        speak(f"{exercise['category']} exercise: {exercise['name']}. {exercise['instruction']}")
+        time.sleep(5)
+    speak("Great job! See you in the next session.")
+
+# News API
+def get_news():
+    api_key = 'bc355b01695842c289e30edb996db071'
+    url = 'https://newsapi.org/v2/top-headlines'
+    parameters = {
+        'country': 'us',
+        'category': 'science',
+        'apiKey': api_key
+    }
+    
+    try:
+        response = requests.get(url, params=parameters)
+        response.raise_for_status()  # Check for HTTP errors
+        news_data = response.json()
+        
+        articles = news_data.get('articles', [])
+        if not articles:
+            raise ValueError("No news articles found.")
+        
+        speak("Here are the top news headlines.")
+        for i, article in enumerate(articles[:5], 1):  # Limit to the top 5 articles
+            title = article.get('title', 'No Title')
+            description = article.get('description', 'No Description')
+            print(f"{i}. {title}")
+            print(f"{description}\n")
+            speak(f"Headline {i}: {title}")
+            if description:
+                speak(f"Description: {description}")
+            speak("Moving to the next news.")
+        
+        speak("These were the top news headlines. Have a great day!")
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching news: {e}")
+        speak(f"Error fetching news: {e}")
+# Email scheduling
+def send_email():
+    email = 'miniproject5133545@gmail.com'
+    receiver_email = 'joseph.thomas8402@gmail.com'
+    subject = 'Appointment with Doctor'
+    message = 'It is to inform that the appointment for the patient is scheduled for this month.'
+    
+    text = f"Subject:{subject}\n\n{message}"
+
+    try:
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(email, 'tldcppbnahsecdwi')  # App password
+        server.sendmail(email, receiver_email, text)
+        server.quit()
+        print("Email has been sent")
+    except Exception as e:
+        print(f"Failed to send email: {e}")
+
+# Washroom Reminder
+def washroom_reminder():
+    reminder_times = ["01:23", "10:00", "12:49", "14:00", "16:00", "18:00", "20:00", "22:00"]
+    current_time = datetime.now().strftime("%H:%M")
+    if current_time in reminder_times:
+        speak("It's time to take a washroom break. Please take a moment!")
+        reminder_times.remove(current_time)
+
+
+# Water Intake Reminder
+def water_reminder():
+    print("Reminder: It's time to drink water!")
+    speak("It's time to drink water. Stay hydrated!")            
+
+# Weather API
+def get_weather(location="Angamaly"):
+    api_key = "cc7d6ae6e40144649e855822240411"
+    base_url = "http://api.weatherapi.com/v1/current.json"
+    url = f"{base_url}?key={api_key}&q={location}"
+
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Check for HTTP errors
+        data = response.json()
+
+        location_name = data.get("location", {}).get("name", "Unknown Location")
+        temperature = data.get("current", {}).get("temp_c", "Unavailable")
+        condition = data.get("current", {}).get("condition", {}).get("text", "Unavailable")
+
+        print(f"Weather in {location_name}:")
+        print(f"Temperature: {temperature} C")
+        print(f"Condition: {condition}")
+
+        engine.say(f"The current weather in {location_name} is as follows.")
+        if temperature != "Unavailable":
+            speak(f"The temperature is {temperature} degrees Celsius.")
+        else:
+            speak("Temperature information is currently unavailable.")
+        speak(f"The weather condition is {condition}.")
+        
+    except requests.exceptions.RequestException as e:
+        error_message = f"Error fetching data from Weather API: {e}"
+        print(error_message)
+        speak(error_message)
+
+# Other existing functions (wakeup_call, suggest_meal, etc.) remain unchanged...
+
+# Scheduling Events
+def schedule_events():
+    schedule.every().day.at("11:20").do(wakeup_call)
+    schedule.every().day.at("11:18").do(lambda: suggest_meal("breakfast"))
+    schedule.every().day.at("12:11").do(lambda: suggest_meal("lunch"))
+    schedule.every().day.at("16:00").do(lambda: suggest_meal("snacks"))
+    schedule.every().day.at("20:00").do(lambda: suggest_meal("dinner"))
+    schedule.every().day.at("12:14").do(announce_exercise)
+    schedule.every().hour.do(water_reminder)
+    schedule.every(1).minutes.do(medication_reminder)  # Adjust times as needed
+    schedule.every().day.at("12:53").do(send_email)  # Email scheduling
+    schedule.every().day.at("12:20").do(get_weather)  # Schedule weather updates at 6:00 PM
+    schedule.every().day.at("01:23").do(washroom_reminder)  # Washroom reminders
+    
+    # Schedule news to be read at 7:30 AM
+    schedule.every().day.at("00:47").do(get_news)
+    
+    # Schedule Bible verse reading
+    schedule.every().day.at("00:39").do(read_daily_verse)
+
+    # Schedule the audio playback at 23:53
+    schedule.every().day.at("11:21").do(play_audio)
+
+# Play audio file
+def play_audio():
+    # Play audio file
+    print("Playing your audio file for the nightly schedule.")
+    pygame.mixer.init()
+    pygame.mixer.music.load("music.mp3")  # Replace with your audio file
+    pygame.mixer.music.play()
+    while pygame.mixer.music.get_busy():
+        time.sleep(1)
+
+# Main Function
+def main():
+    print("Robot Assistant is running...")
+      # Fetch weather for Angamaly, or replace with dynamic input
+    schedule_events()
+
+    while True:
+        try:
+            schedule.run_pending()
+            time.sleep(1)
+        except KeyboardInterrupt:
+            print("Shutting down Robot Assistant.")
+            break
+        except Exception as e:
+            print(f"Error in main loop: {e}")
+
+if __name__ == "__main__":
+    main()
