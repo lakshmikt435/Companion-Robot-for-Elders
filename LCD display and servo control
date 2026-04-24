@@ -1,0 +1,223 @@
+import spidev
+import RPi.GPIO as GPIO
+import time
+
+GPIO.setwarnings(False)
+
+BL = 18
+DC = 25
+RST = 27 
+MOSI = 10
+SCK = 11
+CS = 8
+
+# GPIO pins for servo motors
+SERVO1_PIN = 17
+SERVO2_PIN = 22
+
+class LCD_1inch3:
+    def __init__(self):
+        self.width = 320
+        self.height = 240
+        GPIO.setmode(GPIO.BCM)
+        
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(BL, GPIO.OUT)
+        GPIO.setup(DC, GPIO.OUT)
+        GPIO.setup(RST, GPIO.OUT)
+        GPIO.setup(CS, GPIO.OUT)
+
+        self.spi = spidev.SpiDev()
+        self.spi.open(0, 0)
+        self.spi.max_speed_hz = 1000000
+        
+        GPIO.output(CS, GPIO.HIGH)
+        GPIO.output(RST, GPIO.HIGH)
+
+        self.buffer = bytearray(self.height * self.width * 2)
+        
+    def fill(self, color):
+        for i in range(len(self.buffer) // 2):
+            self.buffer[2 * i] = color >> 8  # High byte
+            self.buffer[2 * i + 1] = color & 0xFF  # Low byte    
+                 
+    def write_cmd(self, cmd):
+        GPIO.output(DC, GPIO.LOW)
+        GPIO.output(CS, GPIO.LOW)
+        self.spi.writebytes([cmd])
+        GPIO.output(CS, GPIO.HIGH)
+
+    def write_data(self, buf):
+        GPIO.output(DC, GPIO.HIGH)
+        GPIO.output(CS, GPIO.LOW)
+        self.spi.writebytes([buf])
+        GPIO.output(CS, GPIO.HIGH)
+
+    def init_display(self):
+        """Initialize display"""
+        GPIO.output(RST, GPIO.HIGH)
+        GPIO.output(RST, GPIO.LOW)
+        GPIO.output(RST, GPIO.HIGH)
+        
+        self.write_cmd(0x36)
+        self.write_data(0x70)
+
+        self.write_cmd(0x3A) 
+        self.write_data(0x05)
+
+        self.write_cmd(0xB2)
+        self.write_data(0x0C)
+        self.write_data(0x0C)
+        self.write_data(0x00)
+        self.write_data(0x33)
+        self.write_data(0x33)
+
+        self.write_cmd(0xB7)
+        self.write_data(0x35) 
+
+        self.write_cmd(0xBB)
+        self.write_data(0x19)
+
+        self.write_cmd(0xC0)
+        self.write_data(0x2C)
+
+        self.write_cmd(0xC2)
+        self.write_data(0x01)
+
+        self.write_cmd(0xC3)
+        self.write_data(0x12)   
+
+        self.write_cmd(0xC4)
+        self.write_data(0x20)
+
+        self.write_cmd(0xC6)
+        self.write_data(0x0F) 
+
+        self.write_cmd(0xD0)
+        self.write_data(0xA4)
+        self.write_data(0xA1)
+
+        self.write_cmd(0xE0)
+        self.write_data(0xD0)
+        self.write_data(0x04)
+        self.write_data(0x0D)
+        self.write_data(0x11)
+        self.write_data(0x13)
+        self.write_data(0x2B)
+        self.write_data(0x3F)
+        self.write_data(0x54)
+        self.write_data(0x4C)
+        self.write_data(0x18)
+        self.write_data(0x0D)
+        self.write_data(0x0B)
+        self.write_data(0x1F)
+        self.write_data(0x23)
+
+        self.write_cmd(0xE1)
+        self.write_data(0xD0)
+        self.write_data(0x04)
+        self.write_data(0x0C)
+        self.write_data(0x11)
+        self.write_data(0x13)
+        self.write_data(0x2C)
+        self.write_data(0x3F)
+        self.write_data(0x44)
+        self.write_data(0x51)
+        self.write_data(0x2F)
+        self.write_data(0x1F)
+        self.write_data(0x1F)
+        self.write_data(0x20)
+        self.write_data(0x23)
+        
+        self.write_cmd(0x21)
+
+        self.write_cmd(0x11)
+
+        self.write_cmd(0x29)
+        # Your initialization code here
+
+    def show(self):
+        # Your code for displaying on the LCD here
+        self.write_cmd(0x2A)
+        self.write_data(0x00)
+        self.write_data(0x00)
+        self.write_data(0x01)
+        self.write_data(0x3f)
+        
+        self.write_cmd(0x2B)
+        self.write_data(0x00)
+        self.write_data(0x00)
+        self.write_data(0x00)
+        self.write_data(0xEF)
+        
+        self.write_cmd(0x2C)
+        
+        GPIO.output(CS, GPIO.LOW)
+        GPIO.output(DC, GPIO.HIGH)
+        self.spi.writebytes2(self.buffer)
+        GPIO.output(CS, GPIO.HIGH)
+        
+    def draw_eyes(self, is_open=True):
+        # Define eye colors
+        eye_color = 0xFFFF if is_open else 0x0000
+        
+        # Draw left eye
+        self.fill_rect(60, 90, 100, 60, eye_color)
+        
+        # Draw right eye
+        self.fill_rect(180, 90, 100, 60, eye_color)
+
+    def fill_rect(self, x, y, width, height, color):
+        for i in range(height):
+            for j in range(width):
+                self.set_pixel(x + j, y + i, color)
+
+    def set_pixel(self, x, y, color):
+        if 0 <= x < self.width and 0 <= y < self.height:
+            pixel_index = (y * self.width + x) * 2
+            self.buffer[pixel_index] = color >> 8  # High byte
+            self.buffer[pixel_index + 1] = color & 0xFF  # Low byte
+
+
+if __name__=='__main__':
+    LCD = LCD_1inch3()
+    
+    # Setup PWM for backlight control
+    pwm = GPIO.PWM(BL, 1000)
+    pwm.start(100) # Set backlight brightness (0-100)
+    
+    # Setup GPIO for servo motors
+    GPIO.setup(SERVO1_PIN, GPIO.OUT)
+    GPIO.setup(SERVO2_PIN, GPIO.OUT)
+    servo1 = GPIO.PWM(SERVO1_PIN, 50)  # GPIO 17 for servo1 with 50Hz frequency
+    servo2 = GPIO.PWM(SERVO2_PIN, 50)  # GPIO 22 for servo2 with 50Hz frequency
+    servo1.start(0)
+    servo2.start(0)
+
+    LCD.init_display()
+
+    # Example of blinking eyes
+    while True:  
+        # Close eyes
+        LCD.draw_eyes(is_open=False)
+        LCD.show()
+        # Rotate servo motors by 90 degrees
+        servo1.ChangeDutyCycle(7)  # Adjust duty cycle for 90 degree rotation
+        servo2.ChangeDutyCycle(7)
+        time.sleep(0.5)
+
+        # Open eyes
+        LCD.draw_eyes(is_open=True)
+        LCD.show()
+        # Rotate servo motors back to initial position
+        servo1.ChangeDutyCycle(2)  # Adjust duty cycle for 0 degree rotation
+        servo2.ChangeDutyCycle(2)
+        time.sleep(0.5)
+
+    # After blinking, turn off the display and cleanup GPIO
+LCD.fill(0x0000)
+LCD.show()
+pwm.stop()
+servo1.stop()
+servo2.stop()
+GPIO.cleanup()
