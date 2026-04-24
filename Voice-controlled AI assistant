@@ -12,7 +12,7 @@ def SpeakText(command):
     engine.say(command)
     engine.runAndWait()
 
-genai.configure(api_key="AIzaSyC0q_aAUnRYAboDaoPIzK7CagEJv8YoPy0")
+genai.configure(api_key="YOUR_API_KEY")
 
 # Set up the model
 generation_config = {
